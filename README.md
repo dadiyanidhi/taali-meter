@@ -6,7 +6,9 @@ An applause meter for the People's Choice award at GDG Ahmedabad Garbathon 2026.
 
 ## Run it
 
-Open the live link in Chrome (or open `index.html` locally), click **Turn on mic**, allow microphone access, and stay quiet for 3 seconds while it measures the room.
+Open the live link in Chrome on a laptop, or on any phone browser to test (or open `index.html` locally). Click **Turn on mic**, allow microphone access, and stay quiet for 3 seconds while it measures the room.
+
+On a phone, use the buttons under the finalist list (Start round, Redo, Winner, Prev, Next, Calibrate, Setup). On a laptop, use the keyboard shortcuts below.
 
 | Key | Action |
 |---|---|

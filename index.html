@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Taali Meter</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,600;0,700;0,900;1,900&display=swap">
 <style>
@@ -24,7 +24,7 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
-body { background: var(--night); color: var(--text); font-family: var(--body); display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
+body { background: var(--night); color: var(--text); font-family: var(--body); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; border-radius: 999px; border: 2px solid var(--marigold); background: transparent; color: var(--text); padding: 10px 22px; font-weight: 600; }
 button.primary { background: var(--marigold); color: var(--night); }
@@ -79,11 +79,39 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px
 .winner .wscore { font-size: 28px; }
 .winner ol { margin: 12px 0 0; padding: 0; list-style: none; font-size: 22px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
 
+html, body { height: 100dvh; }
+body { padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.overlay { overflow-y: auto; }
+.controls { display: none; gap: 8px; }
+.controls button { min-height: 48px; padding: 8px 10px; font-size: 15px; }
+.controls .go { grid-column: span 2; font-size: 18px; }
+@media (max-width: 760px), (pointer: coarse) {
+  .controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .keys { display: none; }
+}
 @media (max-width: 760px) {
-  body { overflow: auto; }
-  .stage { grid-template-columns: 1fr; padding: 20px 16px; }
-  .meterWrap { height: 260px; }
-  .top, .foot { padding-inline: 16px; }
+  .top { padding: 12px 16px; }
+  .top h1 { font-size: 26px; }
+  .org { font-size: 11px; }
+  .stage { grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 16px; }
+  .eyebrow { font-size: 13px; }
+  .team { font-size: clamp(30px, 10vw, 56px); }
+  .call { font-size: 20px; }
+  .score span { font-size: clamp(64px, 24vw, 120px); }
+  .score small { font-size: 18px; }
+  .meterWrap { gap: 6px; }
+  .ticks { font-size: 11px; }
+  .meter { width: 64px; border-radius: 16px; }
+  .fill { border-radius: 12px 12px 0 0; }
+  .foot { padding: 12px 16px 14px; gap: 10px; }
+  .board { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .board li { flex: none; }
+  .board button { padding: 6px 12px; font-size: 14px; }
+  .card { padding: 22px; }
+  .card h2 { font-size: 26px; }
+  .card textarea { min-height: 150px; }
+  .winner .wscore { font-size: 22px; }
+  .winner ol { font-size: 17px; }
 }
 @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
 </style>
@@ -112,6 +140,15 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px
 
 <footer class="foot">
   <ol class="board" id="board"></ol>
+  <div class="controls">
+    <button type="button" class="primary go" id="goBtn">Start round</button>
+    <button type="button" id="redoBtn">Redo</button>
+    <button type="button" id="winBtn">Winner</button>
+    <button type="button" id="prevBtn">Prev</button>
+    <button type="button" id="nextBtn">Next</button>
+    <button type="button" id="calBtn">Calibrate</button>
+    <button type="button" id="setupBtn2">Setup</button>
+  </div>
   <div class="keys">
     <span><kbd>Space</kbd> start round</span><span><kbd>←</kbd> <kbd>→</kbd> finalist</span><span><kbd>R</kbd> redo</span>
     <span><kbd>C</kbd> calibrate</span><span><kbd>W</kbd> reveal winner</span><span><kbd>S</kbd> setup</span><span><kbd>F</kbd> fullscreen</span>
@@ -164,6 +201,9 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px
 <script>
 const $ = (id) => document.getElementById(id);
 const KEY = "garbathon-taali-meter";
+const touchUI = window.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
+const START_HINT = touchUI ? "Tap Start round" : "Press Space to start";
+const REDO_HINT = touchUI ? "Tap Redo to try again" : "Press R to redo";
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } }
@@ -201,6 +241,7 @@ async function enableMic() {
     analyser.fftSize = 2048;
     ctx.createMediaStreamSource(stream).connect(analyser);
     buf = new Float32Array(analyser.fftSize);
+    if (ctx.state === "suspended") await ctx.resume();
     $("startOverlay").hidden = true;
     requestAnimationFrame(tick);
     calibrate();
@@ -264,7 +305,7 @@ async function calibrate() {
   state.floor = Math.min(median + 3, ceilDb() - 12);
   persist();
   state.phase = "idle";
-  setCall("Ready. Press Space to start");
+  setCall(`Ready. ${START_HINT}`);
 }
 
 async function startRound() {
@@ -331,7 +372,7 @@ function selectTeam(i) {
   $("score").textContent = s ?? "?";
   $("mark").hidden = s == null;
   if (s != null) $("mark").style.bottom = s + "%";
-  if (analyser) setCall(s == null ? "Press Space to start" : "Press R to redo");
+  if (analyser) setCall(s == null ? START_HINT : REDO_HINT);
   peak = 0;
   if (state.phase === "result") state.phase = "idle";
   renderBoard();
@@ -448,6 +489,13 @@ document.addEventListener("keydown", (e) => {
   else if (k === "f") { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); }
 });
 $("winnerOverlay").addEventListener("click", () => { $("winnerOverlay").hidden = true; });
+$("goBtn").addEventListener("click", startRound);
+$("redoBtn").addEventListener("click", startRound);
+$("winBtn").addEventListener("click", revealWinner);
+$("prevBtn").addEventListener("click", () => selectTeam(state.current - 1));
+$("nextBtn").addEventListener("click", () => selectTeam(state.current + 1));
+$("calBtn").addEventListener("click", calibrate);
+$("setupBtn2").addEventListener("click", openSetup);
 
 selectTeam(0);
 </script>
